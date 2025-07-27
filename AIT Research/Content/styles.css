@@ -1,0 +1,106 @@
+﻿body {
+    font-family: Arial, sans-serif;
+    background-color: #f4f4f8;
+    margin: 0;
+    padding: 0;
+}
+
+.container {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.card {
+    background-color: #f4f4f8;
+    padding: 40px;
+    border: 1px solid #3f85ff;
+    border-radius: 30px;
+    text-align: center;
+    width: 90%;
+    max-width: 400px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+h1 {
+    font-size: 32px;
+    margin-bottom: 10px;
+    font-weight: bold;
+}
+
+h2 {
+    font-size: 24px;
+    margin-bottom: 20px;
+    font-weight: bold;
+}
+
+.subtitle {
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 30px;
+}
+
+.btnGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    align-items: center;
+}
+
+.btn {
+    width: 250px;
+    padding: 12px 20px;
+    background-color: #397EFF;
+    color: white;
+    font-size: 16px;
+    font-weight: bold;
+    border: none;
+    border-radius: 25px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+}
+
+    .btn:hover {
+        background-color: #2563eb;
+    }
+
+.question {
+    font-weight: bold;
+    font-size: 16px;
+    margin-bottom: 20px;
+    display: block;
+}
+
+.option-group {
+    text-align: left;
+    margin: 20px 0;
+}
+
+    .option-group input {
+        margin-right: 8px;
+    }
+
+.text-answer {
+    width: 50%;
+    padding: 10px;
+    font-size: 14px;
+   
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    margin-bottom: 20px;
+}
+
+.Warning {
+    color:red;
+    font-size:10px;
+}
+.textFieldGRP {
+  display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+}
+/*.textField{
+    width:'100%';
+}*/
