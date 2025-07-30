@@ -101,6 +101,37 @@ h2 {
     gap: 10px;
     align-items: center;
 }
-/*.textField{
-    width:'100%';
-}*/
+.inline-group {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.search-card {
+    width: 100%;
+    max-width: 600px;
+}
+
+.grid-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    font-size: 14px;
+}
+
+    .grid-table th, .grid-table td {
+        border: 1px solid #ccc;
+        padding: 8px 12px;
+        text-align: left;
+    }
+
+    .grid-table th {
+        background-color: #e6f0ff;
+        font-weight: bold;
+    }
+
+.grid-wrap {
+    margin-top: 20px;
+    overflow-x: auto;
+}

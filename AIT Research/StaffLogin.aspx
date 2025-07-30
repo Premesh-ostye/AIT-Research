@@ -18,7 +18,7 @@
              <input id="inputPW" type="password" class="text-answer" placeholder="Password"  />
           
           </div>
-            <asp:Button ID="LoginBTN" runat="server" Text="Login" CssClass="btn" />
+            <asp:Button ID="LoginBTN" runat="server" Text="Login" CssClass="btn" OnClick="LoginBTN_Click" />
         </div>
    
 </div>
