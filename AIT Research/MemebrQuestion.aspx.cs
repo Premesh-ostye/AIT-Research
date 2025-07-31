@@ -66,10 +66,7 @@ namespace AIT_Research
                     Session.Clear();
                     Session.Abandon();
 
-                    // Attempt to close the browser tab using JavaScript (browser-dependent)
-                    ClientScript.RegisterStartupScript(this.GetType(), "closeWindow",
-                        "window.open('','_self').close();", true);
-                    return;
+                    
                 }
 
                 // Verify that an option is selected

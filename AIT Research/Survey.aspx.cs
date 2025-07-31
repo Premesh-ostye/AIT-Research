@@ -162,31 +162,30 @@ namespace AIT_Research
                 if (TextBoxInput.Visible)
                 {
                     string input = TextBoxInput.Text.Trim();
-                    if (string.IsNullOrEmpty(input))
-                    {
-                        DisplayError("Please enter a response.");
-                        return;
-                    }
+                   
                     nextQid = ViewState["NextQID"] != null ? Convert.ToInt32(ViewState["NextQID"]) : -1;
                     usedNextQID = true;
                 }
+                   
                 // Process radio button selection
                 else if (RadioButtonListOptions.Visible)
                 {
-                    if (RadioButtonListOptions.SelectedIndex < 0)
+                    if (RadioButtonListOptions.SelectedIndex >= 0)
                     {
-                        DisplayError("Please select an option.");
-                        return;
+                        int selectedOptionId = Convert.ToInt32(RadioButtonListOptions.SelectedValue);
+                        answerList.Add(new UserAnswer { QID = currentQID, OptionID = selectedOptionId });
+                        nextQid = GetNextQID(selectedOptionId);
+                        usedNextQID = true;
                     }
-                    int selectedOptionId = Convert.ToInt32(RadioButtonListOptions.SelectedValue);
-                    answerList.Add(new UserAnswer { QID = currentQID, OptionID = selectedOptionId });
-                    nextQid = GetNextQID(selectedOptionId);
-                    usedNextQID = true;
+                   
                 }
                 // Process checkbox selections
                 else if (CheckBoxListOptions.Visible)
                 {
-                    int selectableSetting = ViewState["MaxSelectableOption"] != null ? Convert.ToInt32(ViewState["MaxSelectableOption"]) : 1;
+                    int selectableSetting = ViewState["MaxSelectableOption"] != null
+                        ? Convert.ToInt32(ViewState["MaxSelectableOption"])
+                        : 0;
+
                     int minRequired = selectableSetting < 0 ? Math.Abs(selectableSetting) : 0;
                     int maxAllowed = selectableSetting > 0 ? selectableSetting : int.MaxValue;
 
@@ -198,22 +197,27 @@ namespace AIT_Research
                     }
 
                     int selectedCount = selected.Count;
-                    if (selectedCount < minRequired)
-                    {
-                        DisplayError($"Please select at least {minRequired} option(s).");
-                        return;
-                    }
+
                     if (selectedCount > maxAllowed)
                     {
                         DisplayError($"You can select up to {maxAllowed} option(s).");
                         return;
                     }
 
-                    if (selectedCount > 0)
+                    //  Enforce minimum selection only if MaxSelectableOption is negative
+                    if (minRequired > 0 && selectedCount < minRequired)
                     {
-                        foreach (int optId in selected)
-                            answerList.Add(new UserAnswer { QID = currentQID, OptionID = optId });
-                        nextQid = GetNextQID(selected[0]);
+                        DisplayError($"Please select at least {minRequired} option(s).");
+                        return;
+                    }
+
+                    // Save all selected answers
+                    foreach (int optId in selected)
+                        answerList.Add(new UserAnswer { QID = currentQID, OptionID = optId });
+
+                    if (selected.Count > 0)
+                    {
+                        nextQid = GetNextQID(selected[0]); // Use first selected option for nextQID
                         usedNextQID = true;
                     }
                 }
@@ -480,6 +484,7 @@ namespace AIT_Research
             CheckBoxListOptions.Items.Clear();
             RadioButtonListOptions.Visible = false;
             CheckBoxListOptions.Visible = false;
+            TextBoxInput.Text = "";
             TextBoxInput.Visible = false;
             Warning.Visible = false;
         }
