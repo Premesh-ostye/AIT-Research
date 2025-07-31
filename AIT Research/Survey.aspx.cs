@@ -1,6 +1,4 @@
-﻿// Updated version of the Survey logic to support conditional branching based on user input
-// No schema change required — logic uses existing DisplayOrder and Options.NextQID only
-
+﻿// Survey.aspx.cs
 using System;
 using System.Collections.Generic;
 using System.Configuration;
@@ -16,7 +14,7 @@ namespace AIT_Research
             if (!IsPostBack)
             {
                 Session["Answers"] = new List<UserAnswer>();
-                LoadQuestion(1001); // Start with the first question
+                LoadQuestion(1001);
             }
         }
 
@@ -24,6 +22,14 @@ namespace AIT_Research
         {
             public int QID { get; set; }
             public int OptionID { get; set; }
+            public string TextAnswer { get; set; }
+        }
+
+        private string GetConnectionString()
+        {
+            return ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString.Equals("Dev")
+                ? AppConstant.AppConnection.DevConnection
+                : ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString;
         }
 
         private void LoadQuestion(int questionId)
@@ -38,22 +44,18 @@ namespace AIT_Research
                 cmdQ.Parameters.AddWithValue("@qid", questionId);
                 SqlDataReader readerQ = cmdQ.ExecuteReader();
 
-                int maxSelectable = 1;
-                int displayOrder = 0;
+                int maxSelectable = 1, displayOrder = 0;
 
                 if (readerQ.Read())
                 {
                     queslbl.Text = readerQ["QuestionText"].ToString();
                     ViewState["CurrentQID"] = questionId;
-
-                    if (readerQ["MaxSelectableOption"] != DBNull.Value)
-                        maxSelectable = Convert.ToInt32(readerQ["MaxSelectableOption"]);
-
+                    maxSelectable = Convert.ToInt32(readerQ["MaxSelectableOption"]);
                     displayOrder = Convert.ToInt32(readerQ["DisplayOrder"]);
                     ViewState["CurrentDisplayOrder"] = displayOrder;
+                    ViewState["MaxSelectableOption"] = maxSelectable;
                 }
                 readerQ.Close();
-                ViewState["MaxSelectableOption"] = maxSelectable;
 
                 RadioButtonListOptions.Items.Clear();
                 CheckBoxListOptions.Items.Clear();
@@ -68,19 +70,19 @@ namespace AIT_Research
                 while (readerO.Read())
                 {
                     string type = readerO["OptionType"].ToString();
-                    string optionText = readerO["OptionText"].ToString();
+                    string text = readerO["OptionText"].ToString();
                     int optionId = Convert.ToInt32(readerO["OptionID"]);
 
                     if (type == "MCQ")
                     {
                         if (maxSelectable == 1)
                         {
-                            RadioButtonListOptions.Items.Add(new ListItem(optionText, optionId.ToString()));
+                            RadioButtonListOptions.Items.Add(new ListItem(text, optionId.ToString()));
                             RadioButtonListOptions.Visible = true;
                         }
                         else
                         {
-                            CheckBoxListOptions.Items.Add(new ListItem(optionText, optionId.ToString()));
+                            CheckBoxListOptions.Items.Add(new ListItem(text, optionId.ToString()));
                             CheckBoxListOptions.Visible = true;
                         }
                     }
@@ -89,16 +91,8 @@ namespace AIT_Research
                         TextBoxInput.Visible = true;
                     }
                 }
-
                 readerO.Close();
             }
-        }
-
-        private string GetConnectionString()
-        {
-            return ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString.Equals("Dev")
-                ? AppConstant.AppConnection.DevConnection
-                : ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString;
         }
 
         private int GetNextQIDFromOption(int currentQID, List<int> selectedOptionIDs)
@@ -126,8 +120,8 @@ namespace AIT_Research
 
         private int GetNextQIDByDisplayOrder(int currentDisplayOrder)
         {
-            int nextQid = -1;
             string connStr = GetConnectionString();
+            int nextQid = -1;
 
             using (SqlConnection conn = new SqlConnection(connStr))
             {
@@ -146,52 +140,54 @@ namespace AIT_Research
         {
             int currentQID = (int)ViewState["CurrentQID"];
             int currentDisplayOrder = (int)ViewState["CurrentDisplayOrder"];
+            int maxSelectable = (int)ViewState["MaxSelectableOption"];
             var answerList = Session["Answers"] as List<UserAnswer>;
             var selectedOptionIDs = new List<int>();
-            int nextQid = -1;
+            Warning.Visible = false;
 
             if (TextBoxInput.Visible)
             {
                 string input = TextBoxInput.Text.Trim();
-                // Optional: store input somewhere
+                if (!string.IsNullOrEmpty(input))
+                {
+                    answerList.Add(new UserAnswer { QID = currentQID, OptionID = -1, TextAnswer = input });
+                }
             }
             else if (RadioButtonListOptions.Visible)
             {
                 if (RadioButtonListOptions.SelectedIndex >= 0)
                 {
-                    int selectedOptionId = Convert.ToInt32(RadioButtonListOptions.SelectedValue);
-                    answerList.Add(new UserAnswer { QID = currentQID, OptionID = selectedOptionId });
-                    selectedOptionIDs.Add(selectedOptionId);
+                    int selected = Convert.ToInt32(RadioButtonListOptions.SelectedValue);
+                    answerList.Add(new UserAnswer { QID = currentQID, OptionID = selected });
+                    selectedOptionIDs.Add(selected);
                 }
             }
             else if (CheckBoxListOptions.Visible)
             {
-                int maxAllowed = Convert.ToInt32(ViewState["MaxSelectableOption"]);
                 foreach (ListItem item in CheckBoxListOptions.Items)
                 {
                     if (item.Selected)
                     {
                         int optId = Convert.ToInt32(item.Value);
-                        answerList.Add(new UserAnswer { QID = currentQID, OptionID = optId });
                         selectedOptionIDs.Add(optId);
+                        answerList.Add(new UserAnswer { QID = currentQID, OptionID = optId });
                     }
                 }
-
-                if (maxAllowed == -2 && selectedOptionIDs.Count < 2)
+                if (maxSelectable < 0 && selectedOptionIDs.Count < Math.Abs(maxSelectable))
                 {
-                    Warning.Text = "Please select at least 2 options.";
+                    Warning.Text = $"Please select at least {Math.Abs(maxSelectable)} options.";
+                    Warning.Visible = true;
+                    return;
+                }
+                if (maxSelectable > 0 && selectedOptionIDs.Count > maxSelectable)
+                {
+                    Warning.Text = $"Please select no more than {maxSelectable} options.";
                     Warning.Visible = true;
                     return;
                 }
             }
 
-            bool hasAnswer = selectedOptionIDs.Count > 0 || !string.IsNullOrWhiteSpace(TextBoxInput.Text);
-
-            if (hasAnswer)
-            {
-                nextQid = GetNextQIDFromOption(currentQID, selectedOptionIDs);
-            }
-
+            int nextQid = selectedOptionIDs.Count > 0 ? GetNextQIDFromOption(currentQID, selectedOptionIDs) : -1;
             if (nextQid <= 0)
             {
                 nextQid = GetNextQIDByDisplayOrder(currentDisplayOrder);
@@ -206,15 +202,14 @@ namespace AIT_Research
             }
             else
             {
-                Warning.Visible = false;
                 LoadQuestion(nextQid);
             }
         }
 
         private void SaveAnswersToDatabase()
         {
-            List<UserAnswer> answers = Session["Answers"] as List<UserAnswer>;
-            string respondentId = Session["RespondentID"]?.ToString();
+            var answers = Session["Answers"] as List<UserAnswer>;
+            var respondentId = Session["RespondentID"]?.ToString();
 
             if (answers == null || answers.Count == 0 || string.IsNullOrEmpty(respondentId)) return;
 
@@ -223,17 +218,16 @@ namespace AIT_Research
             using (SqlConnection conn = new SqlConnection(connStr))
             {
                 conn.Open();
-
                 foreach (var ans in answers)
                 {
-                    SqlCommand cmd = new SqlCommand("INSERT INTO Response (OptionID, QID, RespondentID) VALUES (@opt, @qid, @rid)", conn);
+                    SqlCommand cmd = new SqlCommand("INSERT INTO Response (OptionID, QID, RespondentID, TextAnswer) VALUES (@opt, @qid, @rid, @txt)", conn);
                     cmd.Parameters.AddWithValue("@opt", ans.OptionID);
                     cmd.Parameters.AddWithValue("@qid", ans.QID);
                     cmd.Parameters.AddWithValue("@rid", respondentId);
+                    cmd.Parameters.AddWithValue("@txt", (object)ans.TextAnswer ?? DBNull.Value);
                     cmd.ExecuteNonQuery();
                 }
             }
-
             Session.Remove("Answers");
             Session.Remove("RespondentID");
         }
