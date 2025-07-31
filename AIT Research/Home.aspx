@@ -11,7 +11,9 @@
         <div class="container">
             <div class="card">
                 <h1>AIT <br />Research</h1>
+                
                 <div class="subtitle">Market Research Made Easy</div>
+                <asp:Label ID="Warning" runat="server" Text="Warning" Visible="False" CssClass="Warning"></asp:Label>
                 <div class="btnGroup">
                     <asp:Button ID="btnStartSurvey" runat="server" Text="Start Survey" CssClass="btn" OnClick="btnStartSurvey_Click" />
                     <asp:Button ID="btnStaffLogin" runat="server" Text="Login as Staff" CssClass="btn" OnClick="btnStaffLogin_Click" />
