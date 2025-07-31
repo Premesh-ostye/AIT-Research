@@ -1,4 +1,7 @@
-﻿using System;
+﻿// Updated version of the Survey logic to support conditional branching based on user input
+// No schema change required — logic uses existing DisplayOrder and Options.NextQID only
+
+using System;
 using System.Collections.Generic;
 using System.Configuration;
 using System.Data.SqlClient;
@@ -8,42 +11,35 @@ namespace AIT_Research
 {
     public partial class Survey : System.Web.UI.Page
     {
-        // Runs once when the page loads
         protected void Page_Load(object sender, EventArgs e)
         {
             if (!IsPostBack)
             {
-                // Store user's selected answers in session
                 Session["Answers"] = new List<UserAnswer>();
-
-                // Load the first question
-                LoadQuestion(1001);
+                LoadQuestion(1001); // Start with the first question
             }
         }
 
-        // A simple class to hold user's selected answer
         public class UserAnswer
         {
             public int QID { get; set; }
             public int OptionID { get; set; }
         }
 
-        // Loads a question from the database by its ID
         private void LoadQuestion(int questionId)
         {
-            string connStr = ConfigurationManager.ConnectionStrings["AITResearchDB"].ConnectionString;
-
+            string connStr = GetConnectionString();
 
             using (SqlConnection conn = new SqlConnection(connStr))
             {
                 conn.Open();
 
-                // Get the question text and max selectable options
-                SqlCommand cmdQ = new SqlCommand("SELECT QuestionText, MaxSelectableOption FROM Questions WHERE QID = @qid", conn);
+                SqlCommand cmdQ = new SqlCommand("SELECT QuestionText, MaxSelectableOption, DisplayOrder FROM Questions WHERE QID = @qid", conn);
                 cmdQ.Parameters.AddWithValue("@qid", questionId);
                 SqlDataReader readerQ = cmdQ.ExecuteReader();
 
-                int maxSelectable = 1; // default to single option
+                int maxSelectable = 1;
+                int displayOrder = 0;
 
                 if (readerQ.Read())
                 {
@@ -52,19 +48,20 @@ namespace AIT_Research
 
                     if (readerQ["MaxSelectableOption"] != DBNull.Value)
                         maxSelectable = Convert.ToInt32(readerQ["MaxSelectableOption"]);
+
+                    displayOrder = Convert.ToInt32(readerQ["DisplayOrder"]);
+                    ViewState["CurrentDisplayOrder"] = displayOrder;
                 }
                 readerQ.Close();
                 ViewState["MaxSelectableOption"] = maxSelectable;
 
-                // Clear previous controls
                 RadioButtonListOptions.Items.Clear();
                 CheckBoxListOptions.Items.Clear();
                 RadioButtonListOptions.Visible = false;
                 CheckBoxListOptions.Visible = false;
                 TextBoxInput.Visible = false;
 
-                // Load the options for the question
-                SqlCommand cmdO = new SqlCommand("SELECT OptionID, OptionText, OptionType, NextQID FROM Options WHERE QID = @qid", conn);
+                SqlCommand cmdO = new SqlCommand("SELECT OptionID, OptionText, OptionType FROM Options WHERE QID = @qid", conn);
                 cmdO.Parameters.AddWithValue("@qid", questionId);
                 SqlDataReader readerO = cmdO.ExecuteReader();
 
@@ -74,26 +71,22 @@ namespace AIT_Research
                     string optionText = readerO["OptionText"].ToString();
                     int optionId = Convert.ToInt32(readerO["OptionID"]);
 
-                    if (type == "MCQ") // Multiple Choice Question
+                    if (type == "MCQ")
                     {
                         if (maxSelectable == 1)
                         {
-                            // Use radio buttons for single selection
                             RadioButtonListOptions.Items.Add(new ListItem(optionText, optionId.ToString()));
                             RadioButtonListOptions.Visible = true;
                         }
                         else
                         {
-                            // Use checkboxes for multiple selections
                             CheckBoxListOptions.Items.Add(new ListItem(optionText, optionId.ToString()));
                             CheckBoxListOptions.Visible = true;
                         }
                     }
-                    else if (type == "TEXT") // Open-ended input
+                    else if (type == "TEXT")
                     {
                         TextBoxInput.Visible = true;
-                        if (readerO["NextQID"] != DBNull.Value)
-                            ViewState["NextQID"] = readerO["NextQID"].ToString(); // store next question ID
                     }
                 }
 
@@ -101,88 +94,123 @@ namespace AIT_Research
             }
         }
 
-        // Called when user clicks "Next"
-        protected void btnNext_Click(object sender, EventArgs e)
+        private string GetConnectionString()
+        {
+            return ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString.Equals("Dev")
+                ? AppConstant.AppConnection.DevConnection
+                : ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString;
+        }
+
+        private int GetNextQIDFromOption(int currentQID, List<int> selectedOptionIDs)
+        {
+            if (selectedOptionIDs == null || selectedOptionIDs.Count == 0)
+                return -1;
+
+            string connStr = GetConnectionString();
+            int nextQid = -1;
+
+            using (SqlConnection conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                string query = "SELECT TOP 1 NextQID FROM Options WHERE QID = @qid AND OptionID IN (" + string.Join(",", selectedOptionIDs) + ") AND NextQID IS NOT NULL";
+
+                SqlCommand cmd = new SqlCommand(query, conn);
+                cmd.Parameters.AddWithValue("@qid", currentQID);
+
+                object result = cmd.ExecuteScalar();
+                if (result != null && result != DBNull.Value)
+                    nextQid = Convert.ToInt32(result);
+            }
+            return nextQid;
+        }
+
+        private int GetNextQIDByDisplayOrder(int currentDisplayOrder)
         {
             int nextQid = -1;
+            string connStr = GetConnectionString();
+
+            using (SqlConnection conn = new SqlConnection(connStr))
+            {
+                conn.Open();
+                SqlCommand cmd = new SqlCommand("SELECT TOP 1 QID FROM Questions WHERE DisplayOrder > @currentDisplayOrder ORDER BY DisplayOrder ASC", conn);
+                cmd.Parameters.AddWithValue("@currentDisplayOrder", currentDisplayOrder);
+
+                object result = cmd.ExecuteScalar();
+                if (result != null && result != DBNull.Value)
+                    nextQid = Convert.ToInt32(result);
+            }
+            return nextQid;
+        }
+
+        protected void btnNext_Click(object sender, EventArgs e)
+        {
             int currentQID = (int)ViewState["CurrentQID"];
+            int currentDisplayOrder = (int)ViewState["CurrentDisplayOrder"];
             var answerList = Session["Answers"] as List<UserAnswer>;
+            var selectedOptionIDs = new List<int>();
+            int nextQid = -1;
 
             if (TextBoxInput.Visible)
             {
-                // For text answers
                 string input = TextBoxInput.Text.Trim();
-                if (string.IsNullOrEmpty(input))
-                {
-                    Warning.Text = "Please enter a response.";
-                    Warning.Visible = true;
-                    return;
-                }
-
-                // Store next question ID (already set earlier)
-                nextQid = Convert.ToInt32(ViewState["NextQID"]);
+                // Optional: store input somewhere
             }
             else if (RadioButtonListOptions.Visible)
             {
-                // For single selection questions
-                if (RadioButtonListOptions.SelectedIndex < 0)
+                if (RadioButtonListOptions.SelectedIndex >= 0)
                 {
-                    Warning.Text = "Please select an option.";
-                    Warning.Visible = true;
-                    return;
+                    int selectedOptionId = Convert.ToInt32(RadioButtonListOptions.SelectedValue);
+                    answerList.Add(new UserAnswer { QID = currentQID, OptionID = selectedOptionId });
+                    selectedOptionIDs.Add(selectedOptionId);
                 }
-
-                int selectedOptionId = Convert.ToInt32(RadioButtonListOptions.SelectedValue);
-                answerList.Add(new UserAnswer { QID = currentQID, OptionID = selectedOptionId });
-
-                nextQid = GetNextQID(selectedOptionId); // Get the follow-up question
             }
             else if (CheckBoxListOptions.Visible)
             {
-                // For multi-select questions
                 int maxAllowed = Convert.ToInt32(ViewState["MaxSelectableOption"]);
-                var selected = new List<int>();
-
                 foreach (ListItem item in CheckBoxListOptions.Items)
                 {
                     if (item.Selected)
-                        selected.Add(Convert.ToInt32(item.Value));
+                    {
+                        int optId = Convert.ToInt32(item.Value);
+                        answerList.Add(new UserAnswer { QID = currentQID, OptionID = optId });
+                        selectedOptionIDs.Add(optId);
+                    }
                 }
 
-                // Special case: if min 2 options are required
-                if (maxAllowed == -2 && selected.Count < 2)
+                if (maxAllowed == -2 && selectedOptionIDs.Count < 2)
                 {
                     Warning.Text = "Please select at least 2 options.";
                     Warning.Visible = true;
                     return;
                 }
-
-                // Save selected answers
-                foreach (int optId in selected)
-                {
-                    answerList.Add(new UserAnswer { QID = currentQID, OptionID = optId });
-                }
-
-                nextQid = GetNextQID(selected[0]); // Move to the next question
             }
 
-            // Save back the session
+            bool hasAnswer = selectedOptionIDs.Count > 0 || !string.IsNullOrWhiteSpace(TextBoxInput.Text);
+
+            if (hasAnswer)
+            {
+                nextQid = GetNextQIDFromOption(currentQID, selectedOptionIDs);
+            }
+
+            if (nextQid <= 0)
+            {
+                nextQid = GetNextQIDByDisplayOrder(currentDisplayOrder);
+            }
+
             Session["Answers"] = answerList;
 
-            if (nextQid == 0 || nextQid == -1)
+            if (nextQid <= 0)
             {
-                // End of survey
                 SaveAnswersToDatabase();
                 Response.Redirect("MemebrQuestion.aspx");
             }
             else
             {
                 Warning.Visible = false;
-                LoadQuestion(nextQid); // Load the next question
+                LoadQuestion(nextQid);
             }
         }
 
-        // Saves all collected answers to the DB
         private void SaveAnswersToDatabase()
         {
             List<UserAnswer> answers = Session["Answers"] as List<UserAnswer>;
@@ -190,8 +218,8 @@ namespace AIT_Research
 
             if (answers == null || answers.Count == 0 || string.IsNullOrEmpty(respondentId)) return;
 
-            string connStr = ConfigurationManager.ConnectionStrings["AITResearchDB"].ConnectionString;
-            // DB connection
+            string connStr = GetConnectionString();
+
             using (SqlConnection conn = new SqlConnection(connStr))
             {
                 conn.Open();
@@ -206,28 +234,8 @@ namespace AIT_Research
                 }
             }
 
-            // Clear session
             Session.Remove("Answers");
             Session.Remove("RespondentID");
-        }
-
-        // Gets the next question ID based on selected option
-        private int GetNextQID(int optionId)
-        {
-            int nextQid = -1;
-            string connStr = ConfigurationManager.ConnectionStrings["AITResearchDB"].ConnectionString;
-
-            using (SqlConnection conn = new SqlConnection(connStr))
-            {
-                conn.Open();
-                SqlCommand cmd = new SqlCommand("SELECT NextQID FROM Options WHERE OptionID = @oid", conn);
-                cmd.Parameters.AddWithValue("@oid", optionId);
-                object result = cmd.ExecuteScalar();
-
-                if (result != DBNull.Value && result != null)
-                    nextQid = Convert.ToInt32(result);
-            }
-            return nextQid;
         }
     }
 }

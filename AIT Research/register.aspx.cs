@@ -22,8 +22,12 @@ namespace AIT_Research
                 lblMsg.Text = "All fields are required.";
                 return;
             }
-
-            string connStr = ConfigurationManager.ConnectionStrings["AITResearchDB"].ConnectionString;
+            
+            string connStr = "";
+            if (ConfigurationManager.ConnectionStrings["DevelopmentConnectionString"].ConnectionString.Equals("Dev"))
+            {
+                connStr = AppConstant.AppConnection.DevConnection;
+            }
 
 
             using (SqlConnection conn = new SqlConnection(connStr))
