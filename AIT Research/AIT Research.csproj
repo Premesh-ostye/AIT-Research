@@ -72,6 +72,7 @@
     <Content Include="MemebrQuestion.aspx" />
     <Content Include="register.aspx" />
     <Content Include="StaffLogin.aspx" />
+    <Content Include="staffSearch.aspx" />
     <Content Include="Survey.aspx" />
     <Content Include="Web.config" />
   </ItemGroup>
@@ -104,6 +105,13 @@
     </Compile>
     <Compile Include="StaffLogin.aspx.designer.cs">
       <DependentUpon>StaffLogin.aspx</DependentUpon>
+    </Compile>
+    <Compile Include="staffSearch.aspx.cs">
+      <DependentUpon>staffSearch.aspx</DependentUpon>
+      <SubType>ASPXCodeBehind</SubType>
+    </Compile>
+    <Compile Include="staffSearch.aspx.designer.cs">
+      <DependentUpon>staffSearch.aspx</DependentUpon>
     </Compile>
     <Compile Include="Survey.aspx.cs">
       <DependentUpon>Survey.aspx</DependentUpon>
